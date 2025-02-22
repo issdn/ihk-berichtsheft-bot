@@ -1,9 +1,35 @@
 <script lang="ts">
-  import Spinner from './Spinner.svelte';
+  import Spinner from '@/lib/Spinner.svelte';
+  import type { Weeks } from '../../lib/fill_fields_types';
+
+  let fileInput: HTMLInputElement | null = $state(null);
+  let parsedData: Weeks | null = $state(null);
+  let error: string | null = $state(null);
 
   let loading = $state(false);
 
   let cancel = $state(false);
+
+  async function handleFileSelect() {
+    error = null;
+    parsedData = null;
+
+    if (!fileInput?.files?.length) {
+      error = 'Please select a file';
+      return;
+    }
+
+    const file = fileInput.files[0];
+
+    try {
+      const text = await file.text();
+      parsedData = JSON.parse(text);
+    } catch (e) {
+      console.error(
+        e instanceof Error ? e.message : 'An unknown error occurred'
+      );
+    }
+  }
 </script>
 
 <main class="w-64 h-64">
@@ -31,8 +57,19 @@
             await browser.tabs.query({ active: true, currentWindow: true })
           )[0].id!;
           let shouldLoad = true;
+          await browser.scripting.executeScript<[Weeks], void>({
+            target: { tabId },
+            world: 'MAIN',
+            func: (data) => {
+              window.pData = data;
+            },
+            args: [parsedData!],
+          });
           while (shouldLoad && !cancel) {
-            const result = await browser.scripting.executeScript<[], boolean>({
+            const result = await browser.scripting.executeScript<
+              [],
+              Promise<boolean>
+            >({
               target: { tabId },
               files: ['content-scripts/fill.js'],
             });
@@ -41,6 +78,21 @@
           loading = false;
         }}>Los!</button
       >
+      <div class="text-center">
+        <input
+          bind:this={fileInput}
+          type="file"
+          accept=".json"
+          onchange={handleFileSelect}
+          class="hidden"
+        />
+        <button
+          class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors"
+          onclick={() => fileInput?.click()}
+        >
+          Upload JSON File
+        </button>
+      </div>
     {/if}
   </div>
 </main>

@@ -1,7 +1,8 @@
-import { fill } from './popup/fill_fields';
-
 export default defineContentScript({
   matches: ['<all_urls>'],
   registration: 'runtime',
-  main: async () => await fill(),
+  world: 'MAIN',
+  main: async () => {
+    return await injectScript('/fill_fields.js', { keepInDom: true });
+  },
 });

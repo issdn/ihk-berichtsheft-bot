@@ -7,4 +7,13 @@ export default defineConfig({
   extensionApi: 'chrome',
   modules: ['@wxt-dev/module-svelte'],
   vite: () => ({ plugins: [tailwindcss()] }),
+  manifest: {
+    permissions: ['storage'],
+    web_accessible_resources: [
+      {
+        resources: ['fill_fields.js'],
+        matches: ['*://*/*'],
+      },
+    ],
+  },
 });
