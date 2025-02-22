@@ -2,7 +2,7 @@ import { Week, Weeks } from '../lib/fill_fields_types';
 
 declare global {
   interface Window {
-    pData: Weeks; // Replace YourDataType with the actual type
+    pData: Weeks;
   }
 }
 
@@ -23,15 +23,12 @@ function isDateInPageRange(targetDate: Date) {
   const dateRangeText = smallTag.textContent.trim();
   const [startDateStr, endDateStr] = dateRangeText.split(' - ');
 
-  // Parse start date
   const [startDay, startMonth, startYear] = startDateStr.split('.');
   const startDate = new Date(`20${startYear}-${startMonth}-${startDay}`);
 
-  // Parse end date
   const [endDay, endMonth, endYear] = endDateStr.split('.');
   const endDate = new Date(`20${endYear}-${endMonth}-${endDay}`);
 
-  // Set times to midnight to compare dates only
   startDate.setHours(0, 0, 0, 0);
   endDate.setHours(0, 0, 0, 0);
   targetDate.setHours(0, 0, 0, 0);
@@ -53,16 +50,7 @@ function openQualifikationen(index: number) {
   ).click();
 }
 
-function save() {
-  (
-    document.querySelector(
-      'button[aria-label="Manuelles Speichern"]'
-    ) as HTMLElement
-  ).click();
-}
-
 function selectCheckboxByLabelText(text: string) {
-  // Find the label element containing the desired text
   const label = Array.from(document.querySelectorAll('label.mdc-label')).find(
     (label) => {
       const labelText = label.textContent;
@@ -75,13 +63,11 @@ function selectCheckboxByLabelText(text: string) {
   );
 
   if (label) {
-    // Get the associated checkbox ID from the 'for' attribute
     const checkboxId = label.getAttribute('for');
     if (checkboxId) {
-      // Select the checkbox and check it
       const checkbox = document.getElementById(checkboxId);
       if (checkbox) {
-        checkbox.click(); // Click to toggle the checkbox
+        checkbox.click();
       }
     }
   }
@@ -124,24 +110,13 @@ function insertDescription(text: string) {
   editor.ckeditorInstance.setData(text);
 }
 
-export async function fill(data: Weeks) {
+async function fillWeek(week: Week) {
   try {
-    if (data.length === 0) return false;
-    const weeksWithoutCurrent = [];
-    let currentWeek: Week | null = null;
-    for (const week of data) {
-      if (isDateInPageRange(new Date(week.date))) {
-        currentWeek = week;
-      } else {
-        weeksWithoutCurrent.push(week);
-      }
-    }
-    window.pData = weeksWithoutCurrent;
-    if (currentWeek === null) return true;
-    const isSchool = currentWeek.ort == 'Schule';
+    if (week === null) return true;
+    const isSchool = week.ort == 'Schule';
     selectOption(document, isSchool ? 0 : 1);
     await sleep(1000);
-    insertDescription(currentWeek.description ?? '');
+    insertDescription(week.description ?? '');
     for (let i = 0; i < 5; i++) {
       await selectOption(
         document.getElementsByClassName(toggleClasses.anwesenheit)[i],
@@ -150,27 +125,38 @@ export async function fill(data: Weeks) {
       setHours(i);
       openQualifikationen(i);
       await sleep(500);
-      currentWeek.qualifications.forEach((qualification) => {
+      Object.values(week.qualifications).forEach((qualification) => {
         selectCheckboxByLabelText(qualification);
       });
       closeDialog();
       await sleep(500);
     }
-    // save();
-    // await sleep(1000);
-    vorherigeWoche();
-    await sleep(500);
   } catch (e) {
     if (e instanceof Error) {
       console.log(`${e.message} - Woche überspringen.`);
     } else {
       console.log('Fehler - Woche überspringen.');
     }
-    // vorherigeWoche();
-    // await sleep(500);
-    return false;
   }
-  return true;
+}
+
+function sortWeeks(entries: Weeks) {
+  return [...entries].sort((a, b) => {
+    const dateA = new Date(a.date);
+    const dateB = new Date(b.date);
+    return dateB.getTime() - dateA.getTime();
+  });
+}
+
+export async function fill(data: Weeks) {
+  data = Object.values(data);
+  const sorted = sortWeeks(data);
+  for (const week of sorted) {
+    await fillWeek(week);
+    await sleep(2000);
+    vorherigeWoche();
+    await sleep(500);
+  }
 }
 
 export default defineUnlistedScript(async () => {

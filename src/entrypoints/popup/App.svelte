@@ -8,7 +8,7 @@
 
   let loading = $state(false);
 
-  let cancel = $state(false);
+  let isCancelled = $state(false);
 
   async function handleFileSelect() {
     error = null;
@@ -39,9 +39,20 @@
     {#if loading}
       <Spinner />
       <button
-        disabled={cancel}
-        onclick={() => {
-          cancel = true;
+        disabled={isCancelled}
+        onclick={async () => {
+          isCancelled = true;
+          const tabId = (
+            await browser.tabs.query({ active: true, currentWindow: true })
+          )[0].id!;
+          await browser.scripting.executeScript<[], void>({
+            target: { tabId },
+            world: 'MAIN',
+            func: () => {
+              window.pData = [];
+            },
+            args: [],
+          });
         }}
         class="bg-slate-50 enabled:hover:bg-slate-200 text-slate-900 enabled:hover:cursor-pointer px-4 py-1 rounded-sm border-none"
         >Abbrechen</button
@@ -51,12 +62,11 @@
       <button
         class="bg-slate-50 enabled:hover:bg-slate-200 text-slate-900 enabled:hover:cursor-pointer px-4 py-1 rounded-sm border-none"
         onclick={async () => {
-          cancel = false;
+          isCancelled = false;
           loading = true;
           const tabId = (
             await browser.tabs.query({ active: true, currentWindow: true })
           )[0].id!;
-          let shouldLoad = true;
           await browser.scripting.executeScript<[Weeks], void>({
             target: { tabId },
             world: 'MAIN',
@@ -65,16 +75,10 @@
             },
             args: [parsedData!],
           });
-          while (shouldLoad && !cancel) {
-            const result = await browser.scripting.executeScript<
-              [],
-              Promise<boolean>
-            >({
-              target: { tabId },
-              files: ['content-scripts/fill.js'],
-            });
-            shouldLoad = result[0].result ?? false;
-          }
+          await browser.scripting.executeScript<[], Promise<boolean>>({
+            target: { tabId },
+            files: ['content-scripts/fill.js'],
+          });
           loading = false;
         }}>Los!</button
       >
