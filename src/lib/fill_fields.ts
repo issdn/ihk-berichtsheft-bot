@@ -99,3 +99,20 @@ export async function fillWeek(week: Week) {
     }
   }
 }
+
+export function getPageDates() {
+  const smallTag = document.querySelector(
+    'h2#berichtsheft-woche-navigation small'
+  );
+
+  const dateRangeText = smallTag!.textContent!.trim();
+  const [startDateStr, endDateStr] = dateRangeText.split(' - ');
+
+  const [startDay, startMonth, startYear] = startDateStr.split('.');
+  const startDate = `20${startYear}-${startMonth}-${startDay}`;
+
+  const [endDay, endMonth, endYear] = endDateStr.split('.');
+  const endDate = `20${endYear}-${endMonth}-${endDay}`;
+
+  return [startDate, endDate];
+}

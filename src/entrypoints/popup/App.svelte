@@ -42,37 +42,26 @@
     });
   }
 
-  async function isDateInPageRange(tabId: number, targetDate: string) {
+  async function getPageDates(tabId: number) {
     return (
-      await browser.scripting.executeScript<[string], boolean>({
+      await browser.scripting.executeScript<[], Promise<[Date, Date]>>({
         target: { tabId },
-        args: [targetDate],
-        func: (dateString) => {
-          const date = new Date(dateString);
-
-          const smallTag = document.querySelector(
-            'h2#berichtsheft-woche-navigation small'
-          );
-
-          const dateRangeText = smallTag!.textContent!.trim();
-          const [startDateStr, endDateStr] = dateRangeText.split(' - ');
-
-          const [startDay, startMonth, startYear] = startDateStr.split('.');
-          const startDate = new Date(
-            `20${startYear}-${startMonth}-${startDay}`
-          );
-
-          const [endDay, endMonth, endYear] = endDateStr.split('.');
-          const endDate = new Date(`20${endYear}-${endMonth}-${endDay}`);
-
-          startDate.setHours(0, 0, 0, 0);
-          endDate.setHours(0, 0, 0, 0);
-          date.setHours(0, 0, 0, 0);
-
-          return date >= startDate && date <= endDate;
-        },
+        files: ['content-scripts/get_page_dates.js'],
       })
-    )[0].result;
+    )[0].result!.map((dateStr) => {
+      const date = new Date(dateStr);
+      date.setHours(0, 0, 0);
+      return date;
+    });
+  }
+
+  async function isDateInPageRange(tabId: number, targetDate: string) {
+    const [startDate, endDate] = await getPageDates(tabId);
+
+    const date = new Date(targetDate);
+    date.setHours(0, 0, 0, 0);
+
+    return date >= startDate && date <= endDate;
   }
 
   async function vorherigeWoche(tabId: number) {
@@ -89,10 +78,24 @@
   }
 
   async function fill(weeks: Weeks) {
+    error = null;
     const tabId = (
       await browser.tabs.query({ active: true, currentWindow: true })
     )[0].id!;
     const sorted = sortWeeks(weeks);
+    const [_, endDate] = await getPageDates(tabId);
+    const latestDate = new Date(sorted[0].date);
+    if (latestDate > endDate) {
+      error = `Um das Skript zu starten musst du die späteste Woche aus der JSON-Datei auswählen.\nD.h. öffne die Woche ${latestDate.toLocaleDateString(
+        'de-DE',
+        {
+          day: '2-digit',
+          month: '2-digit',
+          year: '2-digit',
+        }
+      )}`;
+      return;
+    }
     for (const week of sorted) {
       while (!(await isDateInPageRange(tabId, week.date))) {
         if (isCancelled) return;
@@ -131,7 +134,7 @@
 
 <main class="w-64 h-64">
   <div
-    class="w-full h-full text-neutral-50 bg-neutral-900 flex flex-col-reverse items-center justify-center gap-y-8"
+    class="w-full h-full text-neutral-50 bg-neutral-900 flex flex-col-reverse items-center justify-center gap-y-8 p-8"
   >
     {#if loading}
       <Spinner />
@@ -182,6 +185,9 @@
           {/if}
         </p>
       </div>
+    {/if}
+    {#if error != null}
+      <p class="text-red-400">{error}</p>
     {/if}
   </div>
 </main>
