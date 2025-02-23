@@ -1,6 +1,7 @@
 <script lang="ts">
   import Spinner from '@/lib/Spinner.svelte';
-  import type { Weeks } from '../../lib/fill_fields_types';
+  import type { Week, Weeks } from '../../lib/fill_fields_types';
+  import { sleep } from '../../lib/fill_fields';
 
   let fileInput: HTMLInputElement | null = $state(null);
   let files: any = $state(null);
@@ -33,7 +34,99 @@
     }
   }
 
-  $inspect(files);
+  function sortWeeks(entries: Weeks) {
+    return [...entries].sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateB.getTime() - dateA.getTime();
+    });
+  }
+
+  async function isDateInPageRange(tabId: number, targetDate: string) {
+    return (
+      await browser.scripting.executeScript<[string], boolean>({
+        target: { tabId },
+        args: [targetDate],
+        func: (dateString) => {
+          const date = new Date(dateString);
+
+          const smallTag = document.querySelector(
+            'h2#berichtsheft-woche-navigation small'
+          );
+
+          const dateRangeText = smallTag!.textContent!.trim();
+          const [startDateStr, endDateStr] = dateRangeText.split(' - ');
+
+          const [startDay, startMonth, startYear] = startDateStr.split('.');
+          const startDate = new Date(
+            `20${startYear}-${startMonth}-${startDay}`
+          );
+
+          const [endDay, endMonth, endYear] = endDateStr.split('.');
+          const endDate = new Date(`20${endYear}-${endMonth}-${endDay}`);
+
+          startDate.setHours(0, 0, 0, 0);
+          endDate.setHours(0, 0, 0, 0);
+          date.setHours(0, 0, 0, 0);
+
+          return date >= startDate && date <= endDate;
+        },
+      })
+    )[0].result;
+  }
+
+  async function vorherigeWoche(tabId: number) {
+    await browser.scripting.executeScript<[], void>({
+      target: { tabId },
+      func: () => {
+        (
+          document.querySelector(
+            'a[aria-label="Vorherige Woche"]'
+          ) as HTMLElement
+        ).click();
+      },
+    });
+  }
+
+  async function fill(weeks: Weeks) {
+    const tabId = (
+      await browser.tabs.query({ active: true, currentWindow: true })
+    )[0].id!;
+    const sorted = sortWeeks(weeks);
+    for (const week of sorted) {
+      while (!(await isDateInPageRange(tabId, week.date))) {
+        if (isCancelled) return;
+        await vorherigeWoche(tabId);
+        await sleep(500);
+      }
+      await browser.scripting.executeScript<[Week], void>({
+        target: { tabId },
+        func: (data) => {
+          window.currentWeek = data;
+        },
+        args: [week],
+      });
+      await browser.scripting.executeScript<[], Promise<boolean>>({
+        target: { tabId },
+        files: ['content-scripts/select_ort.js'],
+      });
+      await sleep(1000);
+      await browser.scripting.executeScript<[string], void>({
+        target: { tabId },
+        world: 'MAIN',
+        args: [week.description ?? ''],
+        func: (data) => {
+          (
+            document.querySelector('.ck-editor__editable') as any
+          ).ckeditorInstance.setData(data);
+        },
+      });
+      await browser.scripting.executeScript<[], Promise<boolean>>({
+        target: { tabId },
+        files: ['content-scripts/fill.js'],
+      });
+    }
+  }
 </script>
 
 <main class="w-64 h-64">
@@ -46,17 +139,6 @@
         disabled={isCancelled}
         onclick={async () => {
           isCancelled = true;
-          const tabId = (
-            await browser.tabs.query({ active: true, currentWindow: true })
-          )[0].id!;
-          await browser.scripting.executeScript<[], void>({
-            target: { tabId },
-            world: 'MAIN',
-            func: () => {
-              window.pData = [];
-            },
-            args: [],
-          });
         }}
         class="disabled:bg-neutral-400 bg-neutral-50 enabled:hover:bg-neutral-200 text-neutral-900 enabled:hover:cursor-pointer px-4 py-1 rounded-sm border-none"
         >Abbrechen</button
@@ -69,26 +151,8 @@
         onclick={async () => {
           isCancelled = false;
           loading = true;
-          const tabId = (
-            await browser.tabs.query({ active: true, currentWindow: true })
-          )[0].id!;
-          browser.runtime.onMessage.addListener((message) => {
-            if (message.action === 'stop') {
-              loading = false;
-            }
-          });
-          await browser.scripting.executeScript<[Weeks], void>({
-            target: { tabId },
-            world: 'MAIN',
-            func: (data) => {
-              window.pData = data;
-            },
-            args: [parsedData!],
-          });
-          await browser.scripting.executeScript<[], Promise<boolean>>({
-            target: { tabId },
-            files: ['content-scripts/fill.js'],
-          });
+          await fill(parsedData!);
+          loading = false;
         }}>Start</button
       >
       <div class="flex flex-col gap-y-1 items-center">
