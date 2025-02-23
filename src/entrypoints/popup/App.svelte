@@ -3,6 +3,7 @@
   import type { Weeks } from '../../lib/fill_fields_types';
 
   let fileInput: HTMLInputElement | null = $state(null);
+  let files: any = $state(null);
   let parsedData: Weeks | null = $state(null);
   let error: string | null = $state(null);
 
@@ -30,6 +31,8 @@
       );
     }
   }
+
+  $inspect(files);
 </script>
 
 <main class="w-64 h-64">
@@ -82,8 +85,12 @@
           loading = false;
         }}>Los!</button
       >
+      {#if files != null && files.length != 0}
+        <p class="text-white">{files[0].name}</p>
+      {/if}
       <div class="text-center">
         <input
+          bind:files
           bind:this={fileInput}
           type="file"
           accept=".json"

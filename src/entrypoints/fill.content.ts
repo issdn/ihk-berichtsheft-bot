@@ -1,5 +1,5 @@
 export default defineContentScript({
-  matches: ['<all_urls>'],
+  matches: ['https://bildung.ihk.de/*'],
   registration: 'runtime',
   world: 'MAIN',
   main: async () => {

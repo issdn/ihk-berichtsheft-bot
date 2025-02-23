@@ -86,13 +86,16 @@ async function selectOption(
   elementWithSelect: Element | Document,
   optionIndex: number
 ) {
-  (
-    elementWithSelect.getElementsByTagName('mat-select')[0] as HTMLElement
-  ).click();
-  await sleep(500);
-  (
-    document.getElementsByTagName('mat-option')[optionIndex] as HTMLElement
-  ).click();
+  const select = elementWithSelect.getElementsByTagName(
+    'mat-select'
+  )[0] as HTMLElement;
+  if (select != null) {
+    select.click();
+    await sleep(500);
+    (
+      document.getElementsByTagName('mat-option')[optionIndex] as HTMLElement
+    ).click();
+  }
 }
 
 function vorherigeWoche() {

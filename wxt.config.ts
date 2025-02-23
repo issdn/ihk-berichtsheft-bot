@@ -12,7 +12,7 @@ export default defineConfig({
     web_accessible_resources: [
       {
         resources: ['fill_fields.js'],
-        matches: ['*://*/*'],
+        matches: ['https://bildung.ihk.de/*'],
       },
     ],
   },
