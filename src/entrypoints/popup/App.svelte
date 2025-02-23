@@ -143,7 +143,9 @@
         class="disabled:bg-neutral-400 bg-neutral-50 enabled:hover:bg-neutral-200 text-neutral-900 enabled:hover:cursor-pointer px-4 py-1 rounded-sm border-none"
         >Abbrechen</button
       >
-      <p>Ausfüllen wird abgebrochen.</p>
+      {#if isCancelled}
+        <p>Ausfüllen wird abgebrochen.</p>
+      {/if}
     {:else}
       <button
         disabled={!hasFiles}
