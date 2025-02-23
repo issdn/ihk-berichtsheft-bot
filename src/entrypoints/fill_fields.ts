@@ -115,7 +115,6 @@ function insertDescription(text: string) {
 
 async function fillWeek(week: Week) {
   try {
-    if (week === null) return true;
     const isSchool = week.ort == 'Schule';
     selectOption(document, isSchool ? 0 : 1);
     await sleep(1000);
@@ -155,10 +154,12 @@ export async function fill(data: Weeks) {
   data = Object.values(data);
   const sorted = sortWeeks(data);
   for (const week of sorted) {
+    while (!isDateInPageRange(new Date(week.date))) {
+      vorherigeWoche();
+      await sleep(500);
+    }
     await fillWeek(week);
     await sleep(2000);
-    vorherigeWoche();
-    await sleep(500);
   }
 }
 
