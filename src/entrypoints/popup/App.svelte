@@ -1,11 +1,11 @@
 <script lang="ts">
   import Spinner from '@/lib/Spinner.svelte';
-  import type { Week, Weeks } from '../../lib/fill_fields_types';
+  import type { Day, Days } from '../../lib/fill_fields_types';
   import { sleep } from '../../lib/fill_fields';
 
   let fileInput: HTMLInputElement | null = $state(null);
   let files: any = $state(null);
-  let parsedData: Weeks | null = $state(null);
+  let parsedData: Days | null = $state(null);
   let error: string | null = $state(null);
   let hasFiles: boolean = $derived(files != null && files.length != 0);
 
@@ -34,7 +34,7 @@
     }
   }
 
-  function sortWeeks(entries: Weeks) {
+  function sortWeeks(entries: Days) {
     return [...entries].sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
@@ -60,7 +60,11 @@
 
     const date = new Date(targetDate);
     date.setHours(0, 0, 0, 0);
-
+    console.log(
+      startDate.toDateString(),
+      date.toDateString(),
+      endDate.toDateString()
+    );
     return date >= startDate && date <= endDate;
   }
 
@@ -77,12 +81,46 @@
     });
   }
 
-  async function fill(weeks: Weeks) {
+  async function fillOutData(tabId: number, week: Day) {
+    await browser.scripting.executeScript<[Day], void>({
+      target: { tabId },
+      world: 'MAIN',
+      func: (data) => {
+        window.currentWeek = data;
+      },
+      args: [week],
+    });
+    const res = await browser.scripting.executeScript<[], Promise<boolean>>({
+      target: { tabId },
+      world: 'MAIN',
+      files: ['content-scripts/select_ort.js'],
+    });
+    const isTouched = res[0].result ?? false;
+    if (isTouched) return;
+    await sleep(1000);
+    await browser.scripting.executeScript<[string], void>({
+      target: { tabId },
+      world: 'MAIN',
+      args: [week.description ?? ''],
+      func: (data) => {
+        (
+          document.querySelector('.ck-editor__editable') as any
+        ).ckeditorInstance.setData(data);
+      },
+    });
+    await browser.scripting.executeScript<[], Promise<boolean>>({
+      target: { tabId },
+      world: 'MAIN',
+      files: ['content-scripts/fill.js'],
+    });
+  }
+
+  async function fill(days: Days) {
     error = null;
     const tabId = (
       await browser.tabs.query({ active: true, currentWindow: true })
     )[0].id!;
-    const sorted = sortWeeks(weeks);
+    const sorted = sortWeeks(days);
     const [_, endDate] = await getPageDates(tabId);
     const latestDate = new Date(sorted[0].date);
     if (latestDate > endDate) {
@@ -96,38 +134,38 @@
       )}`;
       return;
     }
-    for (const week of sorted) {
-      while (!(await isDateInPageRange(tabId, week.date))) {
+
+    let daysInWeek = [];
+    for (let i = 0; i < days.length; i++) {
+      const day = days[i];
+      while (!(await isDateInPageRange(tabId, day.date))) {
         if (isCancelled) return;
         await vorherigeWoche(tabId);
-        await sleep(500);
+        await sleep(1000);
       }
-      await browser.scripting.executeScript<[Week], void>({
-        target: { tabId },
-        func: (data) => {
-          window.currentWeek = data;
-        },
-        args: [week],
-      });
-      await browser.scripting.executeScript<[], Promise<boolean>>({
-        target: { tabId },
-        files: ['content-scripts/select_ort.js'],
-      });
-      await sleep(1000);
-      await browser.scripting.executeScript<[string], void>({
-        target: { tabId },
-        world: 'MAIN',
-        args: [week.description ?? ''],
-        func: (data) => {
-          (
-            document.querySelector('.ck-editor__editable') as any
-          ).ckeditorInstance.setData(data);
-        },
-      });
-      await browser.scripting.executeScript<[], Promise<boolean>>({
-        target: { tabId },
-        files: ['content-scripts/fill.js'],
-      });
+      daysInWeek.push(day);
+      const nextDay = days[i + 1];
+      if (
+        nextDay == undefined ||
+        !(await isDateInPageRange(tabId, nextDay.date))
+      ) {
+        const first = daysInWeek.shift()!;
+        const week = daysInWeek.reduce(
+          (prev, { date, ort, qualifications, description }) => {
+            return {
+              date,
+              ort,
+              qualifications: [
+                ...new Set([...prev.qualifications, ...qualifications]),
+              ],
+              description: `${prev.description}\n\n${description}`,
+            };
+          },
+          first
+        );
+        await fillOutData(tabId, week);
+        daysInWeek = [];
+      }
     }
   }
 </script>

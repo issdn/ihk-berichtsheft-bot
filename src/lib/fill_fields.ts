@@ -1,22 +1,21 @@
-import { Week } from './fill_fields_types';
+import { Day } from './fill_fields_types';
 
 declare global {
   interface Window {
-    currentWeek: Week;
+    currentWeek: Day;
+    ng: any;
   }
 }
 
 export class FillException extends Error {}
 
-const toggleClasses = {
-  anwesenheit: 'auswahl-anwesenheit',
-  ort: 'auswahl-ort',
-};
-
 function setHours(timepickerIndex = 0) {
-  document
+  const timeInput = document
     .getElementsByTagName('lib-spb-timepicker')
-    [timepickerIndex].getElementsByTagName('input')[0].value = '08';
+    [timepickerIndex].getElementsByTagName('ngx-mat-timepicker-field')[0];
+  try {
+    window.ng.core.getDebugNode(timeInput).componentInstance.changeHour(8);
+  } catch (_) {}
 }
 
 function openQualifikationen(index: number) {
@@ -59,6 +58,16 @@ function closeDialog() {
     .click();
 }
 
+async function trySave() {
+  const saveBtn = document.querySelector(
+    'button[aria-label="Manuelles Speichern"]'
+  );
+  if (saveBtn != null) {
+    (saveBtn as HTMLButtonElement).click();
+    await sleep(1500);
+  }
+}
+
 export async function selectOption(
   elementWithSelect: Element | Document,
   optionIndex: number
@@ -66,6 +75,7 @@ export async function selectOption(
   const select = elementWithSelect.getElementsByTagName(
     'mat-select'
   )[0] as HTMLElement;
+  if (select.querySelector('.mat-mdc-select-value-text') != null) return true;
   if (select != null) {
     select.click();
     await sleep(500);
@@ -75,7 +85,7 @@ export async function selectOption(
   }
 }
 
-export async function fillWeek(week: Week) {
+export async function fillDay(week: Day) {
   try {
     for (let i = 0; i < 5; i++) {
       await selectOption(
@@ -91,6 +101,7 @@ export async function fillWeek(week: Week) {
       closeDialog();
       await sleep(500);
     }
+    await trySave();
   } catch (e) {
     if (e instanceof Error) {
       console.log(`${e.message} - Woche überspringen.`);

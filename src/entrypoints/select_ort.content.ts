@@ -11,7 +11,7 @@ export default defineContentScript({
       'Schule/Betrieb': 3,
     };
 
-    selectOption(
+    return await selectOption(
       document,
       locations[window.currentWeek.ort as keyof typeof locations]
     );

@@ -1,8 +1,8 @@
-export type Week = {
+export type Day = {
   date: string;
   ort: string;
   qualifications: string[];
   description?: string;
 };
 
-export type Weeks = Week[];
+export type Days = Day[];

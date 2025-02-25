@@ -1,9 +1,10 @@
-import { fillWeek } from '../lib/fill_fields';
+import { fillDay } from '../lib/fill_fields';
 
 export default defineContentScript({
   matches: ['https://bildung.ihk.de/*'],
   registration: 'runtime',
+  world: 'MAIN',
   main: async () => {
-    return await fillWeek(window.currentWeek);
+    return await fillDay(window.currentWeek);
   },
 });
