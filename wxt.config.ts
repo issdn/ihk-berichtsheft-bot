@@ -8,6 +8,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-svelte'],
   vite: () => ({ plugins: [tailwindcss()] }),
   manifest: {
+    version: '1.0.0',
     host_permissions: ['https://bildung.ihk.de/*'],
     permissions: ['storage', 'scripting'],
     web_accessible_resources: [
