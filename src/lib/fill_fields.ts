@@ -97,18 +97,16 @@ export async function getPageDates(tabId: number) {
   });
 }
 
-export async function trySave(tabId: number) {
-  const res = await browser.scripting.executeScript({
+export async function isBerichtFilled(tabId: number) {
+  const res = await browser.scripting.executeScript<[], boolean>({
     target: { tabId },
     world: 'MAIN',
     func: () => {
-      const saveBtn = document.querySelector(
-        'button[aria-label="Manuelles Speichern"]'
+      return (
+        window.ng.core.getDebugNode(
+          document.querySelector('lib-spb-berichtsheft-wocheneintrag')
+        ).componentInstance.wochenEintragFormGroup.controls.ort.value != null
       );
-      if (saveBtn != null) {
-        (saveBtn as HTMLButtonElement).click();
-        return true;
-      }
     },
   });
   return res[0].result ?? false;
@@ -125,17 +123,21 @@ export async function fillDayBericht(
   >({
     target: { tabId },
     world: 'MAIN',
-    func: ({ qualifikationen, anwesenheit }, index) => {
-      const nodeFormGroupControls = window.ng.core.getDebugNode(
-        document.querySelectorAll('lib-spb-berichtsheft-tages-bericht-kompakt')[
-          index
-        ]
-      ).componentInstance.tagesBerichtFormGroup.controls;
-      nodeFormGroupControls.anwesenheit.setValue(anwesenheit);
+    func: ({ qualifikationen, anwesenheit, ort }, index) => {
+      const card = document.querySelectorAll(
+        'lib-spb-berichtsheft-tages-bericht-kompakt'
+      )[index];
+      const nodeFormGroup =
+        window.ng.core.getDebugNode(card).componentInstance
+          .tagesBerichtFormGroup;
+      nodeFormGroup.reset();
+      nodeFormGroup.controls.anwesenheit.setValue(anwesenheit);
+      nodeFormGroup.controls.ort.setValue(ort);
       const eintragControls =
-        nodeFormGroupControls.eintraege.controls[0].controls;
+        nodeFormGroup.controls.eintraege.controls[0].controls;
       eintragControls.dauer.setValue('PT8H');
       eintragControls.qualifikationen.setValue(qualifikationen);
+      nodeFormGroup.updateValueAndValidity();
     },
     args: [day, index],
   });
@@ -146,11 +148,12 @@ export async function fillWeekBericht(tabId: number, week: Day) {
     target: { tabId },
     world: 'MAIN',
     func: ({ ort, text }) => {
-      const controls = window.ng.core.getDebugNode(
+      const formGroup = window.ng.core.getDebugNode(
         document.querySelector('lib-spb-berichtsheft-wocheneintrag')
-      ).componentInstance.wochenEintragFormGroup.controls;
-      controls.ort.setValue(ort);
-      controls[ort.toLowerCase()].setValue({
+      ).componentInstance.wochenEintragFormGroup;
+      formGroup.reset();
+      formGroup.controls.ort.setValue(ort);
+      formGroup.controls[ort.toLowerCase()].setValue({
         text: text,
         textMitKommentaren: text,
         ort: ort,

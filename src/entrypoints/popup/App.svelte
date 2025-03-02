@@ -6,13 +6,14 @@
     fillWeekBericht,
     getDay,
     getPageDates,
+    isBerichtFilled,
     qualifikationenByNr,
     rerender,
     sleep,
-    trySave,
     vorherigeWoche,
   } from '../../lib/fill_fields';
   import { parseStringList } from '@/lib/helpers';
+  import Checkbox from '@/lib/Checkbox.svelte';
 
   let fileInput: HTMLInputElement | null = $state(null);
   let files: any = $state(null);
@@ -21,6 +22,7 @@
   let loading = $state(false);
   let isCancelled = $state(false);
   let hasFiles: boolean = $derived(files != null && files.length != 0);
+  let shouldOverwrite = $state(false);
 
   async function handleFileSelect() {
     error = null;
@@ -158,7 +160,6 @@
 
     await fillDailyReports(tabId, daysInWeek, week);
 
-    await trySave(tabId);
     await sleep(2000);
   }
 
@@ -187,7 +188,9 @@
       if (!(await navigateToCorrectWeek(tabId, day.datum))) {
         return;
       }
-      console.log(processQualifications(day, issues));
+
+      if ((await isBerichtFilled(tabId)) && !shouldOverwrite) continue;
+
       daysInWeek.push({
         ...day,
         text: parseStringList(day.text ?? ''),
@@ -271,6 +274,10 @@
         </p>
       </div>
     {/if}
+    <Checkbox
+      label={'Berichte überschreiben?'}
+      bind:checked={shouldOverwrite}
+    />
 
     {#if error != null}
       <p class="text-red-400">{error}</p>
