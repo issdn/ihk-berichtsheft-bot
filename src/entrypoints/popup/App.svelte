@@ -1,7 +1,17 @@
 <script lang="ts">
   import Spinner from '@/lib/Spinner.svelte';
   import type { Day, Days } from '../../lib/fill_fields_types';
-  import { sleep } from '../../lib/fill_fields';
+  import {
+    fillDayBericht,
+    fillWeekBericht,
+    getDay,
+    getPageDates,
+    qualifikationenByNr,
+    rerender,
+    sleep,
+    trySave,
+    vorherigeWoche,
+  } from '../../lib/fill_fields';
 
   let fileInput: HTMLInputElement | null = $state(null);
   let files: any = $state(null);
@@ -36,22 +46,9 @@
 
   function sortWeeks(entries: Days) {
     return [...entries].sort((a, b) => {
-      const dateA = new Date(a.date);
-      const dateB = new Date(b.date);
+      const dateA = new Date(a.datum);
+      const dateB = new Date(b.datum);
       return dateB.getTime() - dateA.getTime();
-    });
-  }
-
-  async function getPageDates(tabId: number) {
-    return (
-      await browser.scripting.executeScript<[], Promise<[Date, Date]>>({
-        target: { tabId },
-        files: ['content-scripts/get_page_dates.js'],
-      })
-    )[0].result!.map((dateStr) => {
-      const date = new Date(dateStr);
-      date.setHours(0, 0, 0);
-      return date;
     });
   }
 
@@ -60,69 +57,18 @@
 
     const date = new Date(targetDate);
     date.setHours(0, 0, 0, 0);
-    console.log(
-      startDate.toDateString(),
-      date.toDateString(),
-      endDate.toDateString()
-    );
     return date >= startDate && date <= endDate;
   }
 
-  async function vorherigeWoche(tabId: number) {
-    await browser.scripting.executeScript<[], void>({
-      target: { tabId },
-      func: () => {
-        (
-          document.querySelector(
-            'a[aria-label="Vorherige Woche"]'
-          ) as HTMLElement
-        ).click();
-      },
-    });
-  }
-
-  async function fillOutData(tabId: number, week: Day) {
-    await browser.scripting.executeScript<[Day], void>({
-      target: { tabId },
-      world: 'MAIN',
-      func: (data) => {
-        window.currentWeek = data;
-      },
-      args: [week],
-    });
-    const res = await browser.scripting.executeScript<[], Promise<boolean>>({
-      target: { tabId },
-      world: 'MAIN',
-      files: ['content-scripts/select_ort.js'],
-    });
-    const isTouched = res[0].result ?? false;
-    if (isTouched) return;
-    await sleep(1000);
-    await browser.scripting.executeScript<[string], void>({
-      target: { tabId },
-      world: 'MAIN',
-      args: [week.description ?? ''],
-      func: (data) => {
-        (
-          document.querySelector('.ck-editor__editable') as any
-        ).ckeditorInstance.setData(data);
-      },
-    });
-    await browser.scripting.executeScript<[], Promise<boolean>>({
-      target: { tabId },
-      world: 'MAIN',
-      files: ['content-scripts/fill.js'],
-    });
-  }
-
   async function fill(days: Days) {
+    const issues: string[] = [];
     error = null;
     const tabId = (
       await browser.tabs.query({ active: true, currentWindow: true })
     )[0].id!;
     const sorted = sortWeeks(days);
     const [_, endDate] = await getPageDates(tabId);
-    const latestDate = new Date(sorted[0].date);
+    const latestDate = new Date(sorted[0].datum);
     if (latestDate > endDate) {
       error = `Um das Skript zu starten musst du die späteste Woche aus der JSON-Datei auswählen.\nD.h. öffne die Woche ${latestDate.toLocaleDateString(
         'de-DE',
@@ -132,38 +78,67 @@
           year: '2-digit',
         }
       )}`;
-      return;
     }
-
-    let daysInWeek = [];
+    let daysInWeek: Day[] = [];
     for (let i = 0; i < days.length; i++) {
       const day = days[i];
-      while (!(await isDateInPageRange(tabId, day.date))) {
+      while (!(await isDateInPageRange(tabId, day.datum))) {
         if (isCancelled) return;
         await vorherigeWoche(tabId);
         await sleep(1000);
       }
-      daysInWeek.push(day);
+      daysInWeek.push({
+        ...day,
+        qualifikationen: day.qualifikationen
+          .map((q) => {
+            if (typeof q === 'number') {
+              return q;
+            } else {
+              if (!qualifikationenByNr.has(q))
+                return qualifikationenByNr.get(q);
+            }
+            issues.push(
+              `${day.datum} - ${q} ist keine erlaubte Qualifikation.`
+            );
+            return null;
+          })
+          .filter((q) => q != null),
+      });
       const nextDay = days[i + 1];
       if (
         nextDay == undefined ||
-        !(await isDateInPageRange(tabId, nextDay.date))
+        !(await isDateInPageRange(tabId, nextDay.datum))
       ) {
-        const first = daysInWeek.shift()!;
-        const week = daysInWeek.reduce(
-          (prev, { date, ort, qualifications, description }) => {
+        const joinedWeeklyBericht = [...daysInWeek];
+        const first = joinedWeeklyBericht.shift()!;
+        const week = joinedWeeklyBericht.reduce(
+          (prev, { datum, ort, qualifikationen, text, anwesenheit }) => {
             return {
-              date,
+              anwesenheit,
+              datum,
               ort,
-              qualifications: [
-                ...new Set([...prev.qualifications, ...qualifications]),
+              qualifikationen: [
+                ...new Set([...prev.qualifikationen, ...qualifikationen]),
               ],
-              description: `${prev.description}\n\n${description}`,
+              text: `${prev.text}\n\n${text}`,
             };
           },
           first
         );
-        await fillOutData(tabId, week);
+        await fillWeekBericht(tabId, week);
+        await rerender(tabId);
+        await Promise.all(
+          Array.from({ length: 5 }, (_, i) => i).map(async (i) => {
+            const date = await getDay(tabId, i);
+            const daySpecifiedInJson = daysInWeek.find(
+              ({ datum }) => date == new Date(datum)
+            );
+            const dayObj = daySpecifiedInJson ? daySpecifiedInJson : week;
+            return fillDayBericht(tabId, dayObj, i);
+          })
+        );
+        await trySave(tabId);
+        await sleep(2000);
         daysInWeek = [];
       }
     }

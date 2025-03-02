@@ -1,8 +1,9 @@
 export type Day = {
-  date: string;
+  datum: string;
   ort: string;
-  qualifications: string[];
-  description?: string;
+  qualifikationen: (string | number)[];
+  text?: string;
+  anwesenheit: string;
 };
 
 export type Days = Day[];
