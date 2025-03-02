@@ -135,7 +135,7 @@ export async function fillDayBericht(
       const eintragControls =
         nodeFormGroupControls.eintraege.controls[0].controls;
       eintragControls.dauer.setValue('PT8H');
-      eintragControls.qualifikationen.setValue([49]);
+      eintragControls.qualifikationen.setValue(qualifikationen);
     },
     args: [day, index],
   });
