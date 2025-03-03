@@ -10,7 +10,7 @@ export default defineConfig({
   manifest: {
     version: '1.0.0',
     host_permissions: ['https://bildung.ihk.de/*'],
-    permissions: ['storage', 'scripting'],
+    permissions: ['scripting'],
     web_accessible_resources: [
       {
         resources: ['fill_fields.js'],
