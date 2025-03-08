@@ -217,8 +217,17 @@
     if (!parsedData) return;
 
     loading = true;
-    await fill(parsedData);
-    loading = false;
+    try {
+      await fill(parsedData);
+    } catch (e) {
+      if (e instanceof Error) {
+        error = e.message;
+      } else {
+        error = 'Unbekannter Fehler';
+      }
+    } finally {
+      loading = false;
+    }
   }
 </script>
 
